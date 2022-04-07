@@ -1,2 +1,0 @@
-library(forestplot)
-library(tidyverse)
