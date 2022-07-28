@@ -1,0 +1,84 @@
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(plotly)
+library(gganimate)
+library(ggpubr)
+library(gifski)
+
+hos <- suppressMessages(read_csv("hosp.csv"))
+head(hos)
+names(hos)
+```
+
+```{r}
+hos[is.na(hos)] = 0
+
+
+hos_df <- hos %>% 
+  
+  mutate(Year = as.numeric(paste("20", str_sub(Data_Month_Date, -2, -1), sep="")), 
+         Month = str_sub(Data_Month_Date, 1, 3),
+         Att_4to8 = Number_Of_Attendances_agg - Number_Meeting_Target_agg - Attendance_greater_8hrs - Attendances_greater_12hrs,
+         Data_Month_Date = as.Date(paste("1-", toupper(Month), "-", Year, sep = ""), format = '%d-%b-%Y')) %>%   #is >12 included in >8?
+  
+  rename(Date = Data_Month_Date, 
+         Region = HB_Treatment_Description, 
+         Loc_Code = Treatment_Location_Code, 
+         Hospital = Treatment_Location_Name, 
+         Att_Total = Number_Of_Attendances_agg, 
+         Att_Below4 = Number_Meeting_Target_agg, 
+         Att_Above8 = Attendance_greater_8hrs, 
+         Att_Above12 = Attendances_greater_12hrs,
+         Discharge_ToSame = Discharge_destination_admission_to_same,
+         Discharge_Other = Discharge_destination_other_spec,
+         Discharge_Residence = Discharge_destination_residence,
+         Discharge_Transfer = Discharge_destination_transfer,
+         Discharge_Unknown = Discharge_destination_unknown) %>%
+  
+  select(Date, Year, Month, Region, Loc_Code, Hospital, Att_Total, Att_Below4, Att_4to8, Att_Above8, Att_Above12, Discharge_ToSame, Discharge_Other, Discharge_Residence, Discharge_Transfer, Discharge_Unknown, ED_MIU)
+
+head(hos_df)
+```
+
+Total and Proportion Attendance stratified by Region
+```{r}
+hos_by_region <- hos_df %>%
+  group_by(Region, Date) %>%
+  summarise(Total_Att = sum(Att_Total), Year = Year, Prop_4 = sum(Att_Below4)/sum(Att_Total), Prop_Above4 = 1-(sum(Att_Below4)/sum(Att_Total)), Month = Month) %>%
+  distinct()
+
+hos_by_region %>%
+  ggplot(aes(x=Date, y=Total_Att, col=Region)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~Region, scales = "free") +
+  theme_light() +
+  ylab("Total Attendance") + xlab("Time") +
+  theme(legend.position="none")
+
+hos_by_region %>%
+  ggplot(aes(x=Date, y=Prop_4, col=Region)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~Region, scales = "free") +
+  theme_light() +
+  ylab("Proportion Discharged Within 4 Hours") + xlab("Time") +
+  theme(legend.position="none")
+```
+
+```{r, cache=T}
+g <- hos_by_region %>%
+  ggplot(aes(x=Date, y=Prop_4, col=Region)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~Region, scales = "free") +
+  theme_light() +
+  ylab("Proportion Discharged Within 4 Hours") + xlab("Time") +
+  theme(legend.position="none") +
+  labs(title = 'Year: {frame_time}') +
+  transition_time(as.integer(Year)) +
+  ease_aes('linear')
+
+animate(g, renderer=gifski_renderer())
+```
+
